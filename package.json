@@ -1,0 +1,15 @@
+{
+  "name": "auto-checkin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Daily website check-in automation with persistent login state",
+  "scripts": {
+    "login:init": "node scripts/init-login.js",
+    "checkin:run": "node scripts/run-checkin.js",
+    "checkin:test": "node scripts/run-checkin.js --headed",
+    "ui:start": "node scripts/web-ui-server.js"
+  },
+  "dependencies": {
+    "playwright": "^1.54.2"
+  }
+}
