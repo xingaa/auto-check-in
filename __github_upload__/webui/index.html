@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Check-in Console</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">LOCAL CONTROL ROOM</p>
+          <h1>多任务自动签到控制台</h1>
+          <p class="hero-copy">
+            把多个签到站点放在同一个本地面板里管理，按任务保存登录态、单独测试、单独挂计划任务。
+          </p>
+        </div>
+        <div class="hero-panel">
+          <div class="hero-stat-row">
+            <article class="hero-stat">
+              <span>当前任务</span>
+              <strong id="selectedTaskName">加载中...</strong>
+            </article>
+            <article class="hero-stat">
+              <span>任务数量</span>
+              <strong id="taskCount">0</strong>
+            </article>
+          </div>
+          <article class="hero-stat">
+            <span>项目目录</span>
+            <strong id="projectRoot">加载中...</strong>
+          </article>
+          <article class="hero-stat">
+            <span>当前任务资料目录</span>
+            <strong id="profileDir">加载中...</strong>
+          </article>
+          <button id="refreshButton" class="ghost-button" type="button">刷新状态</button>
+        </div>
+      </header>
+
+      <div id="flashMessage" class="flash-message hidden" role="status" aria-live="polite"></div>
+
+      <main class="workspace-grid">
+        <aside class="card task-sidebar">
+          <div class="card-head compact">
+            <div>
+              <p class="card-kicker">TASKS</p>
+              <h2>任务列表</h2>
+            </div>
+            <span id="defaultTaskBadge" class="badge idle">默认任务</span>
+          </div>
+          <div class="task-toolbar">
+            <button id="addTaskButton" class="primary-button" type="button">新增任务</button>
+            <button id="duplicateTaskButton" class="secondary-button" type="button">复制当前任务</button>
+            <button id="deleteTaskButton" class="ghost-button danger-button" type="button">删除当前任务</button>
+          </div>
+          <div id="taskList" class="task-list"></div>
+          <p class="tip">
+            点击左侧任务切换编辑对象。右侧的执行、定时和状态面板都会跟着切到当前任务。
+          </p>
+        </aside>
+
+        <section class="content-stack">
+          <section class="card config-card">
+            <div class="card-head">
+              <div>
+                <p class="card-kicker">CONFIG</p>
+                <h2>当前任务配置</h2>
+              </div>
+              <button id="saveConfigButton" class="primary-button" type="submit" form="configForm">保存全部任务配置</button>
+            </div>
+
+            <form id="configForm" class="config-grid">
+              <label>
+                <span>任务标识</span>
+                <input id="taskKey" name="taskKey" type="text" readonly>
+              </label>
+              <label>
+                <span>站点名称</span>
+                <input id="siteName" name="siteName" type="text" placeholder="例如：公司积分签到">
+              </label>
+              <label>
+                <span>浏览器通道</span>
+                <input id="browserChannel" name="browserChannel" type="text" placeholder="chrome / msedge">
+              </label>
+              <label>
+                <span>登录态目录</span>
+                <input id="userDataDir" name="userDataDir" type="text" placeholder="./data/task-1-profile">
+              </label>
+              <label class="span-2">
+                <span>首次登录打开的地址</span>
+                <input id="startUrl" name="startUrl" type="url" placeholder="https://example.com/login">
+              </label>
+              <label class="span-2">
+                <span>每日签到页地址</span>
+                <input id="openUrl" name="openUrl" type="url" placeholder="https://example.com/checkin">
+              </label>
+              <label>
+                <span>签到类型</span>
+                <select id="checkinType" name="checkinType">
+                  <option value="button">按钮签到</option>
+                  <option value="refresh">刷新签到</option>
+                </select>
+              </label>
+              <label>
+                <span>刷新成功判断</span>
+                <select id="refreshSuccessMode" name="refreshSuccessMode">
+                  <option value="selector">按成功文案判断</option>
+                  <option value="page_load">页面成功加载即成功</option>
+                </select>
+              </label>
+              <label class="checkbox-row">
+                <span>计划任务使用无头模式</span>
+                <input id="headlessOnSchedule" name="headlessOnSchedule" type="checkbox">
+              </label>
+              <label>
+                <span>签到动作后等待时长 (ms)</span>
+                <input id="waitAfterActionMs" name="waitAfterActionMs" type="number" min="500" step="500">
+              </label>
+              <label>
+                <span>页面超时 (ms)</span>
+                <input id="navigationTimeoutMs" name="navigationTimeoutMs" type="number" min="1000" step="1000">
+              </label>
+              <label>
+                <span>动作超时 (ms)</span>
+                <input id="actionTimeoutMs" name="actionTimeoutMs" type="number" min="1000" step="500">
+              </label>
+              <label>
+                <span>首次登录等待时长 (ms)</span>
+                <input id="loginInitTimeoutMs" name="loginInitTimeoutMs" type="number" min="10000" step="1000">
+              </label>
+              <label>
+                <span>计划任务名称</span>
+                <input id="scheduleTaskName" name="scheduleTaskName" type="text" placeholder="AutoCheckin-task-1">
+              </label>
+              <label>
+                <span>每日执行时间</span>
+                <input id="scheduleDailyTime" name="scheduleDailyTime" type="time">
+              </label>
+
+              <label class="span-2">
+                <span>登录成功选择器</span>
+                <textarea id="loggedInSelectors" rows="4" placeholder="每行一个，例如：text=&quot;退出登录&quot;"></textarea>
+              </label>
+              <label class="span-2">
+                <span>掉登录选择器</span>
+                <textarea id="loggedOutSelectors" rows="4" placeholder="每行一个，例如：text=&quot;登录&quot;"></textarea>
+              </label>
+              <label class="span-2">
+                <span>签到前置选择器</span>
+                <textarea id="beforeClickSelectors" rows="4" placeholder="可选，每行一个"></textarea>
+              </label>
+              <label class="span-2">
+                <span>签到按钮选择器</span>
+                <textarea id="buttonSelectors" rows="4" placeholder="每行一个，例如：button:has-text(&quot;签到&quot;)"></textarea>
+              </label>
+              <label class="span-2">
+                <span>签到成功选择器</span>
+                <textarea id="successSelectors" rows="4" placeholder="每行一个，例如：text=&quot;签到成功&quot;"></textarea>
+              </label>
+              <label class="span-2">
+                <span>今日已签到选择器</span>
+                <textarea id="alreadyDoneSelectors" rows="4" placeholder="每行一个，例如：text=&quot;今日已签到&quot;"></textarea>
+              </label>
+            </form>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <p class="card-kicker">LOGS</p>
+                <h2>最近日志</h2>
+              </div>
+            </div>
+            <div id="recentLogs" class="log-list empty-state">还没有日志。</div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <p class="card-kicker">ARTIFACTS</p>
+                <h2>最近截图</h2>
+              </div>
+            </div>
+            <div id="recentArtifacts" class="artifact-grid empty-state">还没有截图。</div>
+          </section>
+        </section>
+
+        <div class="side-column">
+          <section class="card card-runner">
+            <div class="card-head compact">
+              <div>
+                <p class="card-kicker">RUNNER</p>
+                <h2>操作面板</h2>
+              </div>
+              <span id="runnerTaskBadge" class="mini-pill">当前任务</span>
+            </div>
+            <div class="action-list">
+              <button id="loginInitButton" class="primary-button" type="button">1. 首次登录并保存登录态</button>
+              <button id="checkinTestButton" class="secondary-button" type="button">2. 有界面测试签到</button>
+              <button id="checkinNowButton" class="secondary-button" type="button">3. 立即执行一次签到</button>
+            </div>
+            <p class="tip">
+              这里的操作只针对当前选中的任务执行，互不影响。
+            </p>
+          </section>
+
+          <section class="card">
+            <div class="card-head compact">
+              <div>
+                <p class="card-kicker">SCHEDULE</p>
+                <h2>当前任务定时</h2>
+              </div>
+              <span id="scheduleBadge" class="badge idle">未创建</span>
+            </div>
+            <div class="schedule-meta">
+              <div>
+                <span>选中任务</span>
+                <strong id="scheduleTaskOwner">-</strong>
+              </div>
+              <div>
+                <span>任务名</span>
+                <strong id="scheduleTaskDisplay">-</strong>
+              </div>
+              <div>
+                <span>当前状态</span>
+                <strong id="scheduleStateDisplay">未创建</strong>
+              </div>
+              <div>
+                <span>下次运行</span>
+                <strong id="scheduleNextRunDisplay">-</strong>
+              </div>
+              <div>
+                <span>最近运行</span>
+                <strong id="scheduleLastRunDisplay">-</strong>
+              </div>
+            </div>
+            <div class="action-list schedule-actions">
+              <button id="applyScheduleButton" class="primary-button" type="button">保存并启用当前任务</button>
+              <button id="deleteScheduleButton" class="secondary-button" type="button">删除当前任务定时</button>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head compact">
+              <div>
+                <p class="card-kicker">STATUS</p>
+                <h2>当前运行</h2>
+              </div>
+              <span id="jobBadge" class="badge idle">空闲</span>
+            </div>
+            <div class="job-meta">
+              <div>
+                <span>任务</span>
+                <strong id="jobName">暂无</strong>
+              </div>
+              <div>
+                <span>开始时间</span>
+                <strong id="jobStartedAt">-</strong>
+              </div>
+              <div>
+                <span>结束时间</span>
+                <strong id="jobEndedAt">-</strong>
+              </div>
+            </div>
+            <pre id="jobOutput" class="terminal-output">等待任务输出...</pre>
+          </section>
+
+          <section class="card">
+            <div class="card-head compact">
+              <div>
+                <p class="card-kicker">HISTORY</p>
+                <h2>最近运行</h2>
+              </div>
+            </div>
+            <div id="jobHistory" class="history-list empty-state">还没有历史记录。</div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <template id="historyItemTemplate">
+      <article class="history-item">
+        <div class="history-top">
+          <strong class="history-name"></strong>
+          <span class="history-badge"></span>
+        </div>
+        <p class="history-task"></p>
+        <p class="history-time"></p>
+      </article>
+    </template>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
