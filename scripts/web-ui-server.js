@@ -102,25 +102,37 @@ function detectArtifactTaskSegment(fileName, taskKeys) {
   return null;
 }
 
-function mapRecentLogs(taskKeys) {
-  return listRecentFiles("logs", 8, ".log").map((file) => ({
+function mapRecentLogs(taskKeys, options = {}) {
+  const limit = Number(options.limit) > 0 ? Number(options.limit) : 8;
+  const taskKey = options.taskKey || null;
+  const scanLimit = taskKey ? Math.max(limit * 10, 60) : limit;
+
+  return listRecentFiles("logs", scanLimit, ".log").map((file) => ({
     name: file.fileName,
     updatedAt: new Date(file.mtimeMs).toISOString(),
     size: file.size,
     preview: readFileTail(file.absolutePath, 18),
     taskSegment: detectLogTaskSegment(file.fileName, taskKeys),
     href: `/logs/${encodeURIComponent(file.fileName)}`
-  }));
+  }))
+    .filter((item) => !taskKey || item.taskSegment === taskKey)
+    .slice(0, limit);
 }
 
-function mapRecentArtifacts(taskKeys) {
-  return listRecentFiles("artifacts", 12).map((file) => ({
+function mapRecentArtifacts(taskKeys, options = {}) {
+  const limit = Number(options.limit) > 0 ? Number(options.limit) : 12;
+  const taskKey = options.taskKey || null;
+  const scanLimit = taskKey ? Math.max(limit * 10, 80) : limit;
+
+  return listRecentFiles("artifacts", scanLimit).map((file) => ({
     name: file.fileName,
     updatedAt: new Date(file.mtimeMs).toISOString(),
     size: file.size,
     taskSegment: detectArtifactTaskSegment(file.fileName, taskKeys),
     href: `/artifacts/${encodeURIComponent(file.fileName)}`
-  }));
+  }))
+    .filter((item) => !taskKey || item.taskSegment === taskKey)
+    .slice(0, limit);
 }
 
 function getDashboardState(taskKey) {
@@ -142,6 +154,35 @@ function getDashboardState(taskKey) {
       profileDir: path.resolve(projectRoot, selectedTask.userDataDir || `./data/${selectedTask.key}-profile`)
     }
   };
+}
+
+function getAllScheduleStates(config) {
+  return config.tasks.map((task) => {
+    const configuredSchedule = getConfiguredSchedule(task);
+    let scheduleTask;
+
+    try {
+      scheduleTask = runScheduleScript([
+        "-Mode",
+        "query",
+        "-TaskName",
+        configuredSchedule.taskName
+      ]);
+    } catch (error) {
+      scheduleTask = {
+        exists: false,
+        state: "Error",
+        error: error.message || String(error)
+      };
+    }
+
+    return {
+      taskKey: task.key,
+      taskName: task.siteName,
+      configuredSchedule,
+      task: scheduleTask
+    };
+  });
 }
 
 function runScheduleScript(args) {
@@ -318,6 +359,14 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (request.method === "GET" && pathname === "/api/schedules") {
+    const config = readConfig();
+    sendJson(response, 200, {
+      schedules: getAllScheduleStates(config)
+    });
+    return;
+  }
+
   if (request.method === "POST" && pathname === "/api/config") {
     const body = await safeReadJsonBody(request);
     writeConfig(body);
@@ -340,6 +389,23 @@ async function handleApiRequest(request, response, requestUrl) {
       selectedTaskKey: task.key,
       configuredSchedule,
       task: scheduleTask
+    });
+    return;
+  }
+
+  if (request.method === "GET" && pathname === "/api/task-assets") {
+    const config = readConfig();
+    const task = getTaskFromQuery(config, requestUrl);
+    const kind = requestUrl.searchParams.get("kind") === "artifacts" ? "artifacts" : "logs";
+    const taskKeys = config.tasks.map((item) => item.key);
+
+    sendJson(response, 200, {
+      taskKey: task.key,
+      taskName: task.siteName,
+      kind,
+      items: kind === "artifacts"
+        ? mapRecentArtifacts(taskKeys, { taskKey: task.key, limit: 18 })
+        : mapRecentLogs(taskKeys, { taskKey: task.key, limit: 12 })
     });
     return;
   }
